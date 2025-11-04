@@ -1,0 +1,28 @@
+---
+# Handlers for Keycloak service management
+
+- name: restart keycloak
+  systemd:
+    name: keycloak
+    state: restarted
+    daemon_reload: yes
+  become: yes
+
+- name: start keycloak
+  systemd:
+    name: keycloak
+    state: started
+    enabled: yes
+  become: yes
+
+- name: stop keycloak
+  systemd:
+    name: keycloak
+    state: stopped
+  become: yes
+
+- name: reload keycloak
+  systemd:
+    name: keycloak
+    state: reloaded
+  become: yes

@@ -1,0 +1,35 @@
+[Unit]
+Description=Keycloak Application Server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=idle
+User={{ keycloak_user }}
+Group={{ keycloak_group }}
+WorkingDirectory={{ keycloak_home }}
+
+Environment="JAVA_OPTS={{ keycloak_java_opts }}"
+Environment="KC_DB={{ keycloak_db_vendor }}"
+Environment="KC_DB_URL=jdbc:postgresql://{{ keycloak_db_host }}:{{ keycloak_db_port }}/{{ keycloak_db_name }}"
+Environment="KC_DB_USERNAME={{ keycloak_db_user }}"
+Environment="KC_DB_PASSWORD={{ keycloak_db_password }}"
+Environment="KC_HOSTNAME={{ keycloak_hostname }}"
+Environment="KC_HTTPS_PORT={{ keycloak_https_port }}"
+Environment="KC_HTTPS_CERTIFICATE_FILE={{ keycloak_home }}/conf/fullchain.crt"
+Environment="KC_HTTPS_CERTIFICATE_KEY_FILE={{ keycloak_home }}/conf/{{ keycloak_key_file }}"
+Environment="KEYCLOAK_ADMIN={{ keycloak_admin_user }}"
+Environment="KEYCLOAK_ADMIN_PASSWORD={{ keycloak_admin_password }}"
+
+ExecStart={{ keycloak_home }}/bin/kc.sh start --optimized
+ExecReload=/bin/kill -HUP $MAINPID
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=keycloak
+
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

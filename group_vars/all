@@ -1,0 +1,21 @@
+---
+# Keycloak Database Configuration
+keycloak_db_name: "keycloak"
+keycloak_db_user: "keycloak"
+keycloak_db_password: "SecureKeycloakPassword123!"
+
+# Keycloak Admin Configuration
+keycloak_admin_user: "admin"
+keycloak_admin_password: "AdminPassword123!"
+
+# Network Configuration
+keycloak_hostname: "keycloak.hlab.agentsofchaos.io"
+
+# SSL Configuration (if you want to override defaults)
+keycloak_keystore_password: "KeystorePassword123!"
+
+# PostgreSQL Configuration (used by postgresql role)
+# If you need PowerDNS as well, keep these too
+pdns_db_name: "powerdns"
+pdns_db_user: "powerdns"
+pdns_db_password: "PowerDNSPassword123!"

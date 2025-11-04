@@ -1,0 +1,47 @@
+---
+# Keycloak version
+keycloak_version: "23.0.7"
+keycloak_archive: "keycloak-{{ keycloak_version }}.tar.gz"
+keycloak_download_url: "https://github.com/keycloak/keycloak/releases/download/{{ keycloak_version }}/{{ keycloak_archive }}"
+
+# Installation directories
+keycloak_install_dir: "/opt/keycloak"
+keycloak_home: "{{ keycloak_install_dir }}/keycloak-{{ keycloak_version }}"
+
+# Keycloak user
+keycloak_user: "keycloak"
+keycloak_group: "keycloak"
+
+# Database configuration
+keycloak_db_vendor: "postgres"
+keycloak_db_name: "keycloak"
+keycloak_db_user: "keycloak"
+keycloak_db_password: "keycloak_password"
+keycloak_db_host: "localhost"
+keycloak_db_port: "5432"
+
+# Admin user
+keycloak_admin_user: "admin"
+keycloak_admin_password: "admin"
+
+# Network configuration
+keycloak_http_port: "8080"
+keycloak_https_port: "8443"
+keycloak_hostname: "keycloak.hlab.agentsofchaos.io"
+
+# SSL/TLS configuration
+keycloak_keystore_password: "changeit"
+keycloak_keystore_path: "{{ keycloak_home }}/conf/keystore.p12"
+keycloak_cert_file: "hlab_agentsofchaos_io.crt"
+keycloak_key_file: "hlab_agentsofchaos_io.pem"
+keycloak_ca_bundle_file: "hlab_bundle-g2.crt"
+
+# Realm configuration
+keycloak_realm_file: "autolab.json"
+keycloak_realm_name: "autolab"
+
+# Theme configuration
+keycloak_custom_theme_name: "autolab-theme"
+
+# Java options
+keycloak_java_opts: "-Xms512m -Xmx2048m"

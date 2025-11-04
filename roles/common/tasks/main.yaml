@@ -1,0 +1,9 @@
+---
+- name: Install ACL package
+  block:
+    - name: Install acl
+      ansible.builtin.apt:
+        name: acl
+        state: present
+        update_cache: yes
+  become: yes

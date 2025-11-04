@@ -1,0 +1,4 @@
+# file: inventory
+
+[keycloak_node]
+localhost ansible_connection=local

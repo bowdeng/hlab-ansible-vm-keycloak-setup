@@ -1,0 +1,11 @@
+---
+# Main playbook for Keycloak server setup
+
+- name: Configure Keycloak Server
+  hosts: keylcoak_node
+  become: yes
+
+  roles:
+    - common
+    - postgresql
+    - keycloak

@@ -1,0 +1,296 @@
+---
+# roles/keycloak/tasks/main.yml
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: yes
+
+- name: Install required packages
+  apt:
+    name:
+      - openjdk-17-jdk
+      - unzip
+      - python3-psycopg2
+      - openssl
+    state: present
+  become: yes
+
+# Database setup
+- name: Create Keycloak database
+  postgresql_db:
+    name: "{{ keycloak_db_name }}"
+    encoding: UTF-8
+    lc_collate: en_US.UTF-8
+    lc_ctype: en_US.UTF-8
+    template: template0
+  become: yes
+  become_user: postgres
+  vars:
+    ansible_ssh_pipelining: true
+
+- name: Create Keycloak database user
+  postgresql_user:
+    name: "{{ keycloak_db_user }}"
+    password: "{{ keycloak_db_password }}"
+    db: "{{ keycloak_db_name }}"
+  become: yes
+  become_user: postgres
+  vars:
+    ansible_ssh_pipelining: true
+
+- name: Grant all privileges on database to Keycloak user
+  postgresql_privs:
+    database: "{{ keycloak_db_name }}"
+    privs: ALL
+    type: database
+    role: "{{ keycloak_db_user }}"
+  become: yes
+  become_user: postgres
+  vars:
+    ansible_ssh_pipelining: true
+
+- name: Grant schema permissions to Keycloak user
+  postgresql_privs:
+    database: "{{ keycloak_db_name }}"
+    objs: public
+    privs: CREATE,USAGE
+    type: schema
+    role: "{{ keycloak_db_user }}"
+  become: yes
+  become_user: postgres
+  vars:
+    ansible_ssh_pipelining: true
+
+# Keycloak user and directory setup
+- name: Create Keycloak group
+  group:
+    name: "{{ keycloak_group }}"
+    state: present
+  become: yes
+
+- name: Create Keycloak user
+  user:
+    name: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    home: "{{ keycloak_install_dir }}"
+    shell: /bin/bash
+    system: yes
+    createhome: no
+  become: yes
+
+- name: Create Keycloak installation directory
+  file:
+    path: "{{ keycloak_install_dir }}"
+    state: directory
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0755"
+  become: yes
+
+# Download and install Keycloak
+- name: Check if Keycloak is already installed
+  stat:
+    path: "{{ keycloak_home }}"
+  register: keycloak_installed
+
+- name: Download Keycloak
+  get_url:
+    url: "{{ keycloak_download_url }}"
+    dest: "/tmp/{{ keycloak_archive }}"
+    mode: "0644"
+  when: not keycloak_installed.stat.exists
+  become: yes
+
+- name: Extract Keycloak archive
+  unarchive:
+    src: "/tmp/{{ keycloak_archive }}"
+    dest: "{{ keycloak_install_dir }}"
+    remote_src: yes
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+  when: not keycloak_installed.stat.exists
+  become: yes
+
+- name: Remove Keycloak archive
+  file:
+    path: "/tmp/{{ keycloak_archive }}"
+    state: absent
+  when: not keycloak_installed.stat.exists
+  become: yes
+
+# SSL/TLS certificate setup
+- name: Create Keycloak conf directory
+  file:
+    path: "{{ keycloak_home }}/conf"
+    state: directory
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0755"
+  become: yes
+
+- name: Copy SSL certificate
+  copy:
+    src: "certs/{{ keycloak_cert_file }}"
+    dest: "{{ keycloak_home }}/conf/{{ keycloak_cert_file }}"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0644"
+  become: yes
+  notify: restart keycloak
+
+- name: Copy SSL private key
+  copy:
+    src: "certs/{{ keycloak_key_file }}"
+    dest: "{{ keycloak_home }}/conf/{{ keycloak_key_file }}"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0600"
+  become: yes
+  notify: restart keycloak
+
+- name: Copy CA bundle
+  copy:
+    src: "certs/{{ keycloak_ca_bundle_file }}"
+    dest: "{{ keycloak_home }}/conf/{{ keycloak_ca_bundle_file }}"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0644"
+  become: yes
+  notify: restart keycloak
+
+- name: Create combined certificate chain
+  shell: |
+    cat {{ keycloak_home }}/conf/{{ keycloak_cert_file }} \
+        {{ keycloak_home }}/conf/{{ keycloak_ca_bundle_file }} \
+        > {{ keycloak_home }}/conf/fullchain.crt
+  args:
+    creates: "{{ keycloak_home }}/conf/fullchain.crt"
+  become: yes
+  become_user: "{{ keycloak_user }}"
+
+- name: Create PKCS12 keystore from certificates
+  shell: |
+    openssl pkcs12 -export \
+      -in {{ keycloak_home }}/conf/fullchain.crt \
+      -inkey {{ keycloak_home }}/conf/{{ keycloak_key_file }} \
+      -out {{ keycloak_keystore_path }} \
+      -name keycloak \
+      -passout pass:{{ keycloak_keystore_password }}
+  args:
+    creates: "{{ keycloak_keystore_path }}"
+  become: yes
+  become_user: "{{ keycloak_user }}"
+  notify: restart keycloak
+
+- name: Set keystore permissions
+  file:
+    path: "{{ keycloak_keystore_path }}"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0600"
+  become: yes
+
+# Theme deployment
+- name: Create themes directory
+  file:
+    path: "{{ keycloak_home }}/themes/{{ keycloak_custom_theme_name }}"
+    state: directory
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0755"
+  become: yes
+
+- name: Copy custom theme
+  copy:
+    src: "{{ keycloak_custom_theme_name }}/"
+    dest: "{{ keycloak_home }}/themes/{{ keycloak_custom_theme_name }}/"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0755"
+  become: yes
+  notify: restart keycloak
+
+# Keycloak configuration
+- name: Create Keycloak configuration file
+  template:
+    src: keycloak.conf.j2
+    dest: "{{ keycloak_home }}/conf/keycloak.conf"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0644"
+  become: yes
+  notify: restart keycloak
+
+# Systemd service setup
+- name: Create Keycloak systemd service file
+  template:
+    src: keycloak.service.j2
+    dest: /etc/systemd/system/keycloak.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: yes
+  notify: restart keycloak
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Enable and start Keycloak service
+  systemd:
+    name: keycloak
+    enabled: yes
+    state: started
+  become: yes
+
+# Wait for Keycloak to be ready
+- name: Wait for Keycloak to be ready
+  uri:
+    url: "https://{{ keycloak_hostname }}:{{ keycloak_https_port }}/health/ready"
+    validate_certs: no
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: yes
+
+# Realm import
+- name: Copy realm configuration
+  copy:
+    src: "../{{ keycloak_realm_file }}"
+    dest: "{{ keycloak_home }}/data/import/{{ keycloak_realm_file }}"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0644"
+  become: yes
+
+- name: Check if realm already exists
+  uri:
+    url: "https://{{ keycloak_hostname }}:{{ keycloak_https_port }}/realms/{{ keycloak_realm_name }}"
+    validate_certs: no
+    status_code: [200, 404]
+  register: realm_check
+  ignore_errors: yes
+
+- name: Import realm via Keycloak CLI
+  shell: |
+    {{ keycloak_home }}/bin/kc.sh import \
+      --file {{ keycloak_home }}/data/import/{{ keycloak_realm_file }} \
+      --override true
+  become: yes
+  become_user: "{{ keycloak_user }}"
+  when: realm_check.status == 404 or realm_check.failed
+  notify: restart keycloak
+
+- name: Display Keycloak access information
+  debug:
+    msg:
+      - "Keycloak is now running!"
+      - "Access URL: https://{{ keycloak_hostname }}:{{ keycloak_https_port }}"
+      - "Admin Console: https://{{ keycloak_hostname }}:{{ keycloak_https_port }}/admin"
+      - "Admin Username: {{ keycloak_admin_user }}"
+      - "Realm: {{ keycloak_realm_name }}"

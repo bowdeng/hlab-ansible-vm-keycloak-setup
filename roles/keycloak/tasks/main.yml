@@ -1,6 +1,71 @@
 ---
 # roles/keycloak/tasks/main.yml
 
+# DNS Configuration Check
+- name: Check if Keycloak FQDN can be resolved
+  shell: |
+    host {{ keycloak_hostname }} || nslookup {{ keycloak_hostname }}
+  register: dns_check
+  failed_when: false
+  changed_when: false
+
+- name: Display DNS resolution result
+  debug:
+    msg: "DNS resolution {{ 'successful' if dns_check.rc == 0 else 'failed' }} for {{ keycloak_hostname }}"
+
+- name: Get server IP address for DNS record
+  shell: |
+    hostname -I | awk '{print $1}'
+  register: server_ip
+  changed_when: false
+  when: dns_check.rc != 0
+
+- name: Create DNS record in PowerDNS if hostname not resolvable
+  uri:
+    url: "http://{{ pdns_api_host | default('localhost') }}:{{ pdns_api_port | default('8081') }}/api/v1/servers/localhost/zones/{{ dns_domain }}"
+    method: PATCH
+    headers:
+      X-API-Key: "{{ pdns_api_key }}"
+    body_format: json
+    body:
+      rrsets:
+        - name: "{{ keycloak_hostname }}."
+          type: "A"
+          changetype: "REPLACE"
+          records:
+            - content: "{{ server_ip.stdout }}"
+              disabled: false
+    status_code: [200, 204]
+  when: 
+    - dns_check.rc != 0
+    - pdns_api_key is defined
+    - dns_domain is defined
+  register: dns_created
+  ignore_errors: yes
+
+- name: Display DNS record creation result
+  debug:
+    msg: "DNS A record created for {{ keycloak_hostname }} -> {{ server_ip.stdout }}"
+  when: 
+    - dns_check.rc != 0
+    - dns_created is defined
+    - dns_created.status is defined
+
+- name: Wait for DNS propagation
+  pause:
+    seconds: 5
+  when: dns_created is changed
+
+- name: Verify DNS resolution after creation
+  shell: |
+    host {{ keycloak_hostname }} || nslookup {{ keycloak_hostname }}
+  register: dns_verify
+  failed_when: dns_verify.rc != 0
+  changed_when: false
+  retries: 3
+  delay: 5
+  when: dns_created is changed
+
 - name: Update apt cache
   apt:
     update_cache: yes

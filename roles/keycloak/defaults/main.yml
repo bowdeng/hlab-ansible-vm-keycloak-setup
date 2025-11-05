@@ -29,6 +29,12 @@ keycloak_http_port: "8080"
 keycloak_https_port: "8443"
 keycloak_hostname: "keycloak.hlab.agentsofchaos.io"
 
+# DNS configuration (for PowerDNS integration)
+dns_domain: "hlab.agentsofchaos.io"
+pdns_api_host: "localhost"
+pdns_api_port: "8081"
+# pdns_api_key should be defined in group_vars or vault
+
 # SSL/TLS configuration
 keycloak_keystore_password: "changeit"
 keycloak_keystore_path: "{{ keycloak_home }}/conf/keystore.p12"

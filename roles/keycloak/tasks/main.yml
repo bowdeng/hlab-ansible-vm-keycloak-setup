@@ -36,7 +36,7 @@
             - content: "{{ server_ip.stdout }}"
               disabled: false
     status_code: [200, 204]
-  when: 
+  when:
     - dns_check.rc != 0
     - pdns_api_key is defined
     - dns_domain is defined
@@ -46,7 +46,7 @@
 - name: Display DNS record creation result
   debug:
     msg: "DNS A record created for {{ keycloak_hostname }} -> {{ server_ip.stdout }}"
-  when: 
+  when:
     - dns_check.rc != 0
     - dns_created is defined
     - dns_created.status is defined

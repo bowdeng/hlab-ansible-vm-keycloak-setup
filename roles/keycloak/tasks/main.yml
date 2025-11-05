@@ -179,14 +179,36 @@
 
 - name: Debug - Check original key file content
   shell: |
-    head -n 1 {{ keycloak_home }}/conf/{{ keycloak_key_file }}
+    head -n 5 {{ keycloak_home }}/conf/{{ keycloak_key_file }}
   register: key_header
   changed_when: false
   become: yes
 
 - name: Debug - Display key header
   debug:
-    msg: "Key file header: {{ key_header.stdout }}"
+    msg: "Key file first 5 lines: {{ key_header.stdout_lines }}"
+
+- name: Debug - Check if file contains certificate instead of key
+  shell: |
+    if grep -q "BEGIN CERTIFICATE" {{ keycloak_home }}/conf/{{ keycloak_key_file }}; then
+      echo "certificate"
+    elif grep -q "BEGIN.*PRIVATE KEY" {{ keycloak_home }}/conf/{{ keycloak_key_file }}; then
+      echo "private_key"
+    else
+      echo "unknown"
+    fi
+  register: file_type_check
+  changed_when: false
+  become: yes
+
+- name: Debug - Display file type
+  debug:
+    msg: "File contains: {{ file_type_check.stdout }}"
+
+- name: Fail if key file is actually a certificate
+  fail:
+    msg: "The file {{ keycloak_key_file }} appears to be a certificate, not a private key. Please provide the actual private key file."
+  when: file_type_check.stdout == "certificate"
 
 - name: Remove existing decrypted key if present
   file:
@@ -222,8 +244,30 @@
     openssl pkey -in {{ keycloak_home }}/conf/decrypted_key.pem -check -noout 2>&1
   register: key_verify
   changed_when: false
-  failed_when: key_verify.rc != 0
+  failed_when: false
   become: yes
+
+- name: Debug - Show key verification result
+  debug:
+    msg:
+      - "Key verification exit code: {{ key_verify.rc }}"
+      - "Key verification output: {{ key_verify.stdout }}"
+
+- name: Fail with helpful message if key is not readable
+  fail:
+    msg: |
+      The private key file could not be read or converted properly.
+      Original file: {{ keycloak_key_file }}
+      File type detected: {{ file_type_check.stdout }}
+
+      This usually means:
+      1. The .pem file is actually a certificate, not a private key
+      2. The private key is in a different file (often .key extension)
+      3. The key file is corrupted or in an unsupported format
+
+      Please verify you have the correct private key file and update the keycloak_key_file variable.
+      Common private key files end with: .key, -key.pem, .private.pem
+  when: key_verify.rc != 0
 
 - name: Set decrypted key permissions
   file:

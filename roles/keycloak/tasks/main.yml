@@ -177,18 +177,53 @@
   changed_when: false
   become: yes
 
-- name: Convert private key if needed (remove encryption or convert format)
+- name: Debug - Check original key file content
   shell: |
-    openssl rsa -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} \
-      -out {{ keycloak_home }}/conf/decrypted_key.pem \
-      -passin pass: 2>/dev/null || \
-    openssl pkey -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} \
-      -out {{ keycloak_home }}/conf/decrypted_key.pem 2>/dev/null || \
-    cp {{ keycloak_home }}/conf/{{ keycloak_key_file }} {{ keycloak_home }}/conf/decrypted_key.pem
-  args:
-    creates: "{{ keycloak_home }}/conf/decrypted_key.pem"
+    head -n 1 {{ keycloak_home }}/conf/{{ keycloak_key_file }}
+  register: key_header
+  changed_when: false
+  become: yes
+
+- name: Debug - Display key header
+  debug:
+    msg: "Key file header: {{ key_header.stdout }}"
+
+- name: Remove existing decrypted key if present
+  file:
+    path: "{{ keycloak_home }}/conf/decrypted_key.pem"
+    state: absent
+  become: yes
+  when: key_header.stdout is defined
+
+- name: Convert private key to RSA format
+  shell: |
+    if openssl rsa -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} -check -noout 2>/dev/null; then
+      # Key is already valid RSA, just copy it
+      cp {{ keycloak_home }}/conf/{{ keycloak_key_file }} {{ keycloak_home }}/conf/decrypted_key.pem
+    elif openssl ec -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} -check -noout 2>/dev/null; then
+      # Key is EC, convert it
+      openssl ec -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} -out {{ keycloak_home }}/conf/decrypted_key.pem
+    elif openssl pkey -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} -check -noout 2>/dev/null; then
+      # Generic key format, use pkey
+      openssl pkey -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} -out {{ keycloak_home }}/conf/decrypted_key.pem
+    else
+      # Try as encrypted RSA with empty password
+      openssl rsa -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} -passin pass: -out {{ keycloak_home }}/conf/decrypted_key.pem 2>/dev/null || \
+      # Last resort - just copy
+      cp {{ keycloak_home }}/conf/{{ keycloak_key_file }} {{ keycloak_home }}/conf/decrypted_key.pem
+    fi
   become: yes
   become_user: "{{ keycloak_user }}"
+
+- name: Verify decrypted key is readable
+  shell: |
+    openssl rsa -in {{ keycloak_home }}/conf/decrypted_key.pem -check -noout 2>&1 || \
+    openssl ec -in {{ keycloak_home }}/conf/decrypted_key.pem -check -noout 2>&1 || \
+    openssl pkey -in {{ keycloak_home }}/conf/decrypted_key.pem -check -noout 2>&1
+  register: key_verify
+  changed_when: false
+  failed_when: key_verify.rc != 0
+  become: yes
 
 - name: Set decrypted key permissions
   file:

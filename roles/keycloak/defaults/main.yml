@@ -32,9 +32,9 @@ keycloak_hostname: "keycloak.hlab.agentsofchaos.io"
 # SSL/TLS configuration
 keycloak_keystore_password: "changeit"
 keycloak_keystore_path: "{{ keycloak_home }}/conf/keystore.p12"
-keycloak_cert_file: "hlab_agentsofchaos_io.crt"
+keycloak_cert_file: "hlab.agentsofchaos.crt"
 keycloak_key_file: "hlab.agentsofchaos.key"
-keycloak_ca_bundle_file: "hlab_bundle-g2.crt"
+keycloak_ca_bundle_file: "sf_bundle-g2.crt"
 
 # Realm configuration
 keycloak_realm_file: "autolab.json"

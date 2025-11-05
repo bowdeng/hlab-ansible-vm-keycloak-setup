@@ -160,15 +160,31 @@
   become: yes
   notify: restart keycloak
 
+- name: Remove old fullchain certificate if it exists
+  file:
+    path: "{{ keycloak_home }}/conf/fullchain.crt"
+    state: absent
+  become: yes
+  when: keycloak_cert_file is defined
+
 - name: Create combined certificate chain
   shell: |
     cat {{ keycloak_home }}/conf/{{ keycloak_cert_file }} \
         {{ keycloak_home }}/conf/{{ keycloak_ca_bundle_file }} \
         > {{ keycloak_home }}/conf/fullchain.crt
-  args:
-    creates: "{{ keycloak_home }}/conf/fullchain.crt"
   become: yes
   become_user: "{{ keycloak_user }}"
+
+- name: Verify fullchain certificate is valid
+  shell: |
+    openssl x509 -in {{ keycloak_home }}/conf/fullchain.crt -noout -text | head -20
+  register: fullchain_check
+  changed_when: false
+  become: yes
+
+- name: Display fullchain certificate subject
+  debug:
+    msg: "{{ fullchain_check.stdout_lines | select('match', '.*Subject:.*') | list }}"
 
 - name: Check if private key is encrypted
   shell: |
@@ -322,6 +338,12 @@
       These two commands should produce identical MD5 hashes.
   when: cert_key_match.rc != 0
 
+- name: Remove old keystore if it exists
+  file:
+    path: "{{ keycloak_keystore_path }}"
+    state: absent
+  become: yes
+
 - name: Create PKCS12 keystore from certificates
   shell: |
     openssl pkcs12 -export \
@@ -330,8 +352,6 @@
       -out {{ keycloak_keystore_path }} \
       -name keycloak \
       -passout pass:{{ keycloak_keystore_password }}
-  args:
-    creates: "{{ keycloak_keystore_path }}"
   become: yes
   become_user: "{{ keycloak_user }}"
   notify: restart keycloak

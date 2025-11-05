@@ -277,6 +277,51 @@
     mode: "0600"
   become: yes
 
+- name: Verify certificate and key match
+  shell: |
+    CERT_MODULUS=$(openssl x509 -noout -modulus -in {{ keycloak_home }}/conf/{{ keycloak_cert_file }} 2>/dev/null | openssl md5)
+    KEY_MODULUS=$(openssl rsa -noout -modulus -in {{ keycloak_home }}/conf/decrypted_key.pem 2>/dev/null | openssl md5 || \
+                  openssl ec -noout -text -in {{ keycloak_home }}/conf/decrypted_key.pem 2>/dev/null | grep pub -A 10 | openssl md5)
+
+    echo "Certificate MD5: $CERT_MODULUS"
+    echo "Key MD5: $KEY_MODULUS"
+
+    if [ "$CERT_MODULUS" = "$KEY_MODULUS" ]; then
+      echo "MATCH: Certificate and key are a matching pair"
+      exit 0
+    else
+      echo "MISMATCH: Certificate and key do NOT match"
+      exit 1
+    fi
+  register: cert_key_match
+  failed_when: false
+  changed_when: false
+  become: yes
+
+- name: Display certificate/key match result
+  debug:
+    msg: "{{ cert_key_match.stdout_lines }}"
+
+- name: Fail if certificate and key don't match
+  fail:
+    msg: |
+      ERROR: The certificate and private key do not match!
+
+      Certificate file: {{ keycloak_cert_file }}
+      Private key file: {{ keycloak_key_file }}
+
+      This means these files are not a matching pair. You need to ensure that:
+      1. The certificate was generated from this specific private key
+      2. Both files are from the same certificate request/generation process
+      3. The files haven't been mixed up with certificates/keys from different domains
+
+      To verify your files locally, run:
+      openssl x509 -noout -modulus -in {{ keycloak_cert_file }} | openssl md5
+      openssl rsa -noout -modulus -in {{ keycloak_key_file }} | openssl md5
+
+      These two commands should produce identical MD5 hashes.
+  when: cert_key_match.rc != 0
+
 - name: Create PKCS12 keystore from certificates
   shell: |
     openssl pkcs12 -export \

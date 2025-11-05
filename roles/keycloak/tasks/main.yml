@@ -170,11 +170,39 @@
   become: yes
   become_user: "{{ keycloak_user }}"
 
+- name: Check if private key is encrypted
+  shell: |
+    grep -q "ENCRYPTED" {{ keycloak_home }}/conf/{{ keycloak_key_file }} && echo "encrypted" || echo "unencrypted"
+  register: key_encryption_status
+  changed_when: false
+  become: yes
+
+- name: Convert private key if needed (remove encryption or convert format)
+  shell: |
+    openssl rsa -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} \
+      -out {{ keycloak_home }}/conf/decrypted_key.pem \
+      -passin pass: 2>/dev/null || \
+    openssl pkey -in {{ keycloak_home }}/conf/{{ keycloak_key_file }} \
+      -out {{ keycloak_home }}/conf/decrypted_key.pem 2>/dev/null || \
+    cp {{ keycloak_home }}/conf/{{ keycloak_key_file }} {{ keycloak_home }}/conf/decrypted_key.pem
+  args:
+    creates: "{{ keycloak_home }}/conf/decrypted_key.pem"
+  become: yes
+  become_user: "{{ keycloak_user }}"
+
+- name: Set decrypted key permissions
+  file:
+    path: "{{ keycloak_home }}/conf/decrypted_key.pem"
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_group }}"
+    mode: "0600"
+  become: yes
+
 - name: Create PKCS12 keystore from certificates
   shell: |
     openssl pkcs12 -export \
       -in {{ keycloak_home }}/conf/fullchain.crt \
-      -inkey {{ keycloak_home }}/conf/{{ keycloak_key_file }} \
+      -inkey {{ keycloak_home }}/conf/decrypted_key.pem \
       -out {{ keycloak_keystore_path }} \
       -name keycloak \
       -passout pass:{{ keycloak_keystore_password }}

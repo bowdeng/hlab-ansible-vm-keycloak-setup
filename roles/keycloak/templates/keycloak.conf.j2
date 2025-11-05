@@ -16,7 +16,7 @@ http-enabled=true
 http-port={{ keycloak_http_port }}
 https-port={{ keycloak_https_port }}
 https-certificate-file={{ keycloak_home }}/conf/fullchain.crt
-https-certificate-key-file={{ keycloak_home }}/conf/{{ keycloak_key_file }}
+https-certificate-key-file={{ keycloak_home }}/conf/decrypted_key.pem
 
 # Proxy
 proxy=edge

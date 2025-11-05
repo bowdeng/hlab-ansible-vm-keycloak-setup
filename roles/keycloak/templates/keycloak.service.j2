@@ -17,7 +17,7 @@ Environment="KC_DB_PASSWORD={{ keycloak_db_password }}"
 Environment="KC_HOSTNAME={{ keycloak_hostname }}"
 Environment="KC_HTTPS_PORT={{ keycloak_https_port }}"
 Environment="KC_HTTPS_CERTIFICATE_FILE={{ keycloak_home }}/conf/fullchain.crt"
-Environment="KC_HTTPS_CERTIFICATE_KEY_FILE={{ keycloak_home }}/conf/{{ keycloak_key_file }}"
+Environment="KC_HTTPS_CERTIFICATE_KEY_FILE={{ keycloak_home }}/conf/decrypted_key.pem"
 Environment="KEYCLOAK_ADMIN={{ keycloak_admin_user }}"
 Environment="KEYCLOAK_ADMIN_PASSWORD={{ keycloak_admin_password }}"
 

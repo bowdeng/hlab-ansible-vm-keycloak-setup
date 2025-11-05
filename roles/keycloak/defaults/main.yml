@@ -33,7 +33,7 @@ keycloak_hostname: "keycloak.hlab.agentsofchaos.io"
 keycloak_keystore_password: "changeit"
 keycloak_keystore_path: "{{ keycloak_home }}/conf/keystore.p12"
 keycloak_cert_file: "hlab_agentsofchaos_io.crt"
-keycloak_key_file: "hlab_agentsofchaos_io.pem"
+keycloak_key_file: "hlab.agentsofchaos.key"
 keycloak_ca_bundle_file: "hlab_bundle-g2.crt"
 
 # Realm configuration
